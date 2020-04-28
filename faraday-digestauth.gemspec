@@ -21,7 +21,7 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency 'faraday', '>= 0.7'
   spec.add_dependency 'net-http-digest_auth', '~> 1.4'
-  spec.add_development_dependency 'bundler', '~> 1.3'
+  spec.add_development_dependency 'bundler', '>= 1.3', '< 3.0'
   spec.add_development_dependency 'coveralls', '~> 0.1'
   spec.add_development_dependency 'rake', '~> 10'
   spec.add_development_dependency 'rspec', '~> 3'
