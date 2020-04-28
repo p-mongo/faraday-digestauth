@@ -50,16 +50,16 @@ module Faraday
       # env - A Hash with the request environment.
       #
       # Returns a Faraday::Response.
+      #
+      # rubocop:disable Metrics/AbcSize
       def call(env)
         if @challenge_header
           env[:request_headers]['Authorization'] = header(env, @challenge_header)
           response = @app.call(env)
-          unless response.status == 401
-            return response
-          end
+          return response unless response.status == 401
         end
         response ||= handshake(env)
-        # TODO if request had a payload and handshake succeeded but without
+        # TODO: if request had a payload and handshake succeeded but without
         # the payload, this is probably not what the user expected.
         return response unless response.status == 401
         unless response.headers['www-authenticate'] =~ /Digest +[^\s]+/
@@ -70,6 +70,7 @@ module Faraday
         env[:request_headers]['Authorization'] = header(env, challenge_header)
         @app.call(env)
       end
+      # rubocop:enable Metrics/AbcSize
 
       private
 
