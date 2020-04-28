@@ -35,23 +35,39 @@ module Faraday
         @user = user
         @password = password
         @opts = opts
+        @auth = Net::HTTP::DigestAuth.new
       end
 
-      # Public: Sends a first request with an empty body to get the
-      # authentication headers and then send the same request with the body and
-      # authorization header.
+      # Public: Performs a request with digest authentication.
+      #
+      # On the first request, sends a first request with an empty body
+      # to get the authentication headers and then send the same request with
+      # the body and authorization header.
+      #
+      # On subsequent requests, uses the server nonce from the previous request
+      # to create the authorization header.
       #
       # env - A Hash with the request environment.
       #
       # Returns a Faraday::Response.
       def call(env)
-        response = handshake(env)
+        if @challenge_header
+          env[:request_headers]['Authorization'] = header(env, @challenge_header)
+          response = @app.call(env)
+          unless response.status == 401
+            return response
+          end
+        end
+        response ||= handshake(env)
+        # TODO if request had a payload and handshake succeeded but without
+        # the payload, this is probably not what the user expected.
         return response unless response.status == 401
         unless response.headers['www-authenticate'] =~ /Digest +[^\s]+/
           return response
         end
 
-        env[:request_headers]['Authorization'] = header(response)
+        challenge_header = response.headers['www-authenticate']
+        env[:request_headers]['Authorization'] = header(env, challenge_header)
         @app.call(env)
       end
 
@@ -73,15 +89,22 @@ module Faraday
       # response - A Faraday::Response with the authenticate headers.
       #
       # Returns a String with the DigestAuth header.
-      def header(response)
-        uri = response.env[:url]
+      def header(env, challenge_header)
+        uri = env[:url].dup
         uri.user = CGI.escape @user
         uri.password = CGI.escape @password
 
-        realm = response.headers['www-authenticate']
-        method = response.env[:method].to_s.upcase
+        method = env[:method].to_s.upcase
 
-        Net::HTTP::DigestAuth.new.auth_header(uri, realm, method)
+        unless @challenge_header
+          # The first nonce count that net/http/digest_auth generates is 0,
+          # which is not accepted by various servers.
+          # https://github.com/drbrain/net-http-digest_auth/pull/17
+          @auth.auth_header(uri, challenge_header, method)
+        end
+        @challenge_header = challenge_header
+
+        @auth.auth_header(uri, challenge_header, method)
       end
     end
   end
